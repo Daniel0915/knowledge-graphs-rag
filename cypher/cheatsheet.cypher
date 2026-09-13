@@ -63,3 +63,29 @@ RETURN andreas, hasRelationship, emil;
 
 // --- L2: 방향 무시 조회 (화살표 없음) ---
 MATCH (a:Person {name:"Andreas"})-[r]-(other) RETURN type(r), other.name;
+
+// --- L3: 벡터 인덱스 생성 (차원 수는 임베딩 모델과 일치해야 함) ---
+CREATE VECTOR INDEX movie_tagline_embeddings IF NOT EXISTS
+FOR (m:Movie) ON (m.taglineEmbedding)
+OPTIONS { indexConfig: {
+  `vector.dimensions`: 1536,
+  `vector.similarity_function`: 'cosine'
+}};
+
+SHOW VECTOR INDEXES;
+
+// --- L3: 텍스트 임베딩 후 노드 속성으로 저장 ---
+MATCH (movie:Movie) WHERE movie.tagline IS NOT NULL
+WITH movie, genai.vector.encode(
+    movie.tagline, "OpenAI",
+    {token: $openAiApiKey, endpoint: $openAiEndpoint}) AS vector
+CALL db.create.setNodeVectorProperty(movie, "taglineEmbedding", vector);
+
+// --- L3: 질문 임베딩 -> 유사도 검색 (score는 1에 가까울수록 유사) ---
+WITH genai.vector.encode(
+    $question, "OpenAI",
+    {token: $openAiApiKey, endpoint: $openAiEndpoint}) AS question_embedding
+CALL db.index.vector.queryNodes(
+    'movie_tagline_embeddings', $top_k, question_embedding
+    ) YIELD node AS movie, score
+RETURN movie.title, movie.tagline, score;
