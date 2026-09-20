@@ -115,3 +115,53 @@ WITH chunk, genai.vector.encode(
   chunk.text, "OpenAI",
   {token: $openAiApiKey, endpoint: $openAiEndpoint}) AS vector
 CALL db.create.setNodeVectorProperty(chunk, "textEmbedding", vector);
+
+// --- L5: map projection - 노드에서 지정 속성만 뽑아 map으로 ---
+MATCH (anyChunk:Chunk)
+WITH anyChunk LIMIT 1
+RETURN anyChunk { .names, .source, .formId, .cik, .cusip6 } AS formInfo;
+
+// --- L5: 섹션별 청크를 순서대로 모아 NEXT로 연결 (APOC) ---
+MATCH (from_same_section:Chunk)
+WHERE from_same_section.formId = $formIdParam
+  AND from_same_section.f10kItem = $f10kItemParam
+WITH from_same_section
+  ORDER BY from_same_section.chunkSeqId ASC
+WITH collect(from_same_section) AS section_chunk_list
+  CALL apoc.nodes.link(section_chunk_list, "NEXT", {avoidDuplicates: true})
+RETURN size(section_chunk_list);
+
+// --- L5: 속성 값이 같은 노드끼리 관계 연결 ---
+MATCH (c:Chunk), (f:Form)
+  WHERE c.formId = f.formId
+MERGE (c)-[newRelationship:PART_OF]->(f)
+RETURN count(newRelationship);
+
+// --- L5: 관계에 속성 붙이기 (각 섹션의 첫 청크로 가는 지름길) ---
+MATCH (first:Chunk), (f:Form)
+WHERE first.formId = f.formId AND first.chunkSeqId = 0
+WITH first, f
+  MERGE (f)-[r:SECTION {f10kItem: first.f10kItem}]->(first)
+RETURN count(r);
+
+// --- L5: 경로(path)를 변수로 - length()는 관계 개수 ---
+MATCH window = (c1:Chunk)-[:NEXT]->(c2:Chunk)-[:NEXT]->(c3:Chunk)
+  WHERE c1.chunkId = $chunkIdParam
+RETURN length(window) AS windowPathLength, nodes(window) AS chunkList;
+
+// --- L5: 가변 길이 패턴 *0..1 - 경계(첫/마지막 청크)에서도 매칭 성공 ---
+MATCH window = (:Chunk)-[:NEXT*0..1]->(c:Chunk)-[:NEXT*0..1]->(:Chunk)
+  WHERE c.chunkId = $chunkIdParam
+WITH window AS longestChunkWindow
+  ORDER BY length(window) DESC LIMIT 1
+RETURN length(longestChunkWindow);
+
+// --- L5: retrieval_query - 벡터 검색 결과를 윈도우로 확장 ---
+// LangChain 규약상 text, score, metadata 세 컬럼을 반환해야 한다
+MATCH window = (:Chunk)-[:NEXT*0..1]->(node)-[:NEXT*0..1]->(:Chunk)
+WITH node, score, window AS longestWindow
+  ORDER BY length(window) DESC LIMIT 1
+WITH nodes(longestWindow) AS chunkList, node, score
+  UNWIND chunkList AS chunkRows
+WITH collect(chunkRows.text) AS textList, node, score
+RETURN apoc.text.join(textList, " \n ") AS text, score, node {.source} AS metadata;
