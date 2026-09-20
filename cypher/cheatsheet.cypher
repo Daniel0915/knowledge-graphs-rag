@@ -165,3 +165,58 @@ WITH nodes(longestWindow) AS chunkList, node, score
   UNWIND chunkList AS chunkRows
 WITH collect(chunkRows.text) AS textList, node, score
 RETURN apoc.text.join(textList, " \n ") AS text, score, node {.source} AS metadata;
+
+// --- L6: 공통 식별자로 서로 다른 출처의 데이터 연결 ---
+MATCH (com:Company), (form:Form)
+  WHERE com.cusip6 = form.cusip6
+MERGE (com)-[:FILED]->(form);
+
+// --- L6: 전문 검색(fulltext) 인덱스 - 고유명사는 임베딩보다 이쪽 ---
+CREATE FULLTEXT INDEX fullTextManagerNames
+  IF NOT EXISTS
+  FOR (mgr:Manager) ON EACH [mgr.managerName];
+
+CALL db.index.fulltext.queryNodes("fullTextManagerNames", "royal bank")
+  YIELD node, score
+RETURN node.managerName, score;
+
+// --- L6: 관계 속성을 MERGE 키로 (분기가 다르면 별개 관계) ---
+// CSV는 모든 값이 문자열이므로 toFloat/toInteger 형변환이 필요하다
+MATCH (mgr:Manager {managerCik: $ownsParam.managerCik}),
+      (com:Company {cusip6: $ownsParam.cusip6})
+MERGE (mgr)-[owns:OWNS_STOCK_IN {
+    reportCalendarOrQuarter: $ownsParam.reportCalendarOrQuarter
+}]->(com)
+ON CREATE
+    SET owns.value  = toFloat($ownsParam.value),
+        owns.shares = toInteger($ownsParam.shares);
+
+// --- L6: 청크에서 여러 홉 떨어진 정보까지 탐색 ---
+MATCH (:Chunk {chunkId: $chunkIdParam})-[:PART_OF]->(f:Form),
+      (com:Company)-[:FILED]->(f),
+      (mgr:Manager)-[:OWNS_STOCK_IN]->(com)
+RETURN com.companyName, count(mgr.managerName) AS numberOfinvestors;
+
+// --- L6: 그래프 데이터를 LLM이 읽을 문장으로 번역 ---
+MATCH (:Chunk {chunkId: $chunkIdParam})-[:PART_OF]->(f:Form),
+      (com:Company)-[:FILED]->(f),
+      (mgr:Manager)-[owns:OWNS_STOCK_IN]->(com)
+RETURN mgr.managerName + " owns " + owns.shares +
+    " shares of " + com.companyName +
+    " at a value of $" + apoc.number.format(toInteger(owns.value)) AS text
+LIMIT 10;
+
+// --- L6: retrieval_query - 문서 밖 정보를 문맥에 주입 ---
+MATCH (node)-[:PART_OF]->(f:Form),
+    (f)<-[:FILED]-(com:Company),
+    (com)<-[owns:OWNS_STOCK_IN]-(mgr:Manager)
+WITH node, score, mgr, owns, com
+    ORDER BY owns.shares DESC LIMIT 10
+WITH collect(
+    mgr.managerName + " owns " + owns.shares +
+    " shares in " + com.companyName +
+    " at a value of $" + apoc.number.format(toInteger(owns.value)) + "."
+) AS investment_statements, node, score
+RETURN apoc.text.join(investment_statements, "\n") + "\n" + node.text AS text,
+    score,
+    { source: node.source } AS metadata;

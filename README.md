@@ -20,7 +20,7 @@
 | 4 | Preparing Text Data for RAG | [노트](<notes/03-Preparing Text for RAG/03-Preparing Text for RAG.md>) | ✅ |
 | 5 | Constructing a Knowledge Graph from Text | [노트](<notes/04-constructing-a-knowledge-graph-from-text-documents/04-constructing-a-knowledge-graph-from-text-documents.md>) | ✅ |
 | 6 | Adding Relationships to the Knowledge Graph | [노트](<notes/05-adding-relationships-to-the-sec-knowledge-graph/05-adding-relationships-to-the-sec-knowledge-graph.md>) | ✅ |
-| 7 | Expanding the Knowledge Graph | [노트](notes/07-expanding-the-kg.md) | ⬜ |
+| 7 | Expanding the Knowledge Graph | [노트](<notes/06-expanding-the-sec-knowledge-graph/06-expanding-the-sec-knowledge-graph.md>) | ✅ |
 | 8 | Chatting with the Knowledge Graph | [노트](notes/08-chatting-with-the-kg.md) | ⬜ |
 
 > 상태: ⬜ 예정 / 🟡 진행중 / ✅ 완료
