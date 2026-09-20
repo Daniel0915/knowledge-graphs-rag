@@ -18,7 +18,7 @@
 | 2 | Knowledge Graph Fundamentals | [노트](notes/01-kg-fundamentals/01-kg-fundamentals.md) | ✅ |
 | 3 | Querying Knowledge Graphs with Cypher | [노트](<notes/02-Querying Knowledge Graphs/02-Querying Knowledge Graphs.md>) | ✅ |
 | 4 | Preparing Text Data for RAG | [노트](<notes/03-Preparing Text for RAG/03-Preparing Text for RAG.md>) | ✅ |
-| 5 | Constructing a Knowledge Graph from Text | [노트](notes/05-constructing-kg-from-text.md) | ⬜ |
+| 5 | Constructing a Knowledge Graph from Text | [노트](<notes/04-constructing-a-knowledge-graph-from-text-documents/04-constructing-a-knowledge-graph-from-text-documents.md>) | ✅ |
 | 6 | Adding Relationships to the Knowledge Graph | [노트](notes/06-adding-relationships.md) | ⬜ |
 | 7 | Expanding the Knowledge Graph | [노트](notes/07-expanding-the-kg.md) | ⬜ |
 | 8 | Chatting with the Knowledge Graph | [노트](notes/08-chatting-with-the-kg.md) | ⬜ |

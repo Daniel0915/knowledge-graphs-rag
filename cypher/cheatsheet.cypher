@@ -89,3 +89,29 @@ CALL db.index.vector.queryNodes(
     'movie_tagline_embeddings', $top_k, question_embedding
     ) YIELD node AS movie, score
 RETURN movie.title, movie.tagline, score;
+
+// --- L4: 청크 노드 upsert (chunkId를 고유 키로, 생성 시에만 속성 채움) ---
+MERGE (mergedChunk:Chunk {chunkId: $chunkParam.chunkId})
+    ON CREATE SET
+        mergedChunk.names = $chunkParam.names,
+        mergedChunk.formId = $chunkParam.formId,
+        mergedChunk.cik = $chunkParam.cik,
+        mergedChunk.cusip6 = $chunkParam.cusip6,
+        mergedChunk.source = $chunkParam.source,
+        mergedChunk.f10kItem = $chunkParam.f10kItem,
+        mergedChunk.chunkSeqId = $chunkParam.chunkSeqId,
+        mergedChunk.text = $chunkParam.text
+RETURN mergedChunk;
+
+// --- L4: 유니크 제약 (중복 청크 방지 + 조회 속도 향상) ---
+CREATE CONSTRAINT unique_chunk IF NOT EXISTS
+    FOR (c:Chunk) REQUIRE c.chunkId IS UNIQUE;
+
+SHOW INDEXES;
+
+// --- L4: 아직 임베딩 없는 청크만 채우기 (재실행 시 비용 절약) ---
+MATCH (chunk:Chunk) WHERE chunk.textEmbedding IS NULL
+WITH chunk, genai.vector.encode(
+  chunk.text, "OpenAI",
+  {token: $openAiApiKey, endpoint: $openAiEndpoint}) AS vector
+CALL db.create.setNodeVectorProperty(chunk, "textEmbedding", vector);
